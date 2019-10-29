@@ -5,29 +5,35 @@ type Number = int
 type Card = Mark * Number
 type Deck = Card list
 
-type Turn = Player | Dealer
-
-type Player = {
-    Cards: Card list
-}
-type Dealer = {
-    Cards: Card list
-}
-
-type GameResult = InProgress | PlayerWon | DealerWon | PlayerBusted | DealerBusted | Draw
-
-// TODO ゲーム中の状態を管理
-type BlackjackState = {
-    Deck: Deck
-    Player: Player
-    Dealer: Dealer
-    Turn: Turn
-    Result: GameResult
-}
-
-type Action = Hit | Stand
-
 type Point = Point of int | Bust
+
+type Cards = Card list
+
+type StandCards = Cards * Point
+
+type Player = 
+    | Cards of Cards
+    | StandCards of StandCards
+
+type Dealer =
+    | Cards of Cards
+    | StandCards of StandCards
+
+type BlackjackInitialized = {
+    Deck: Deck
+    PlayerTurn: Cards
+    Dealer: Cards
+}
+type BlackjackPlayerEnd = {
+    Deck: Deck
+    PlayerEnd: StandCards
+    DealerTurn: Cards
+}
+type BlackjackDealerEnd = {
+    Deck: Deck
+    PlayerEnd: StandCards
+    DealerEnd: StandCards
+}
 
 let shuffle list =
     let swap (array : _[]) i j =
@@ -54,9 +60,6 @@ let cardInfo card =
     | Heart, i -> sprintf "ハートの%i" i
     | Spade, i -> sprintf "スペードの%i" i
 
-let startGame =
-    { Deck=createDeck; Player={Cards=[]}; Dealer={Cards=[]}; Turn=Player; Result=InProgress }
-
 let calcPoint cards =
     let cardPoint (mark, number) =
         match number with
@@ -67,81 +70,69 @@ let calcPoint cards =
     | point when point > 21 -> Bust
     | point -> Point(point)
 
-let drawOneCard (deck: Deck) : Card * Deck =
-    match deck with
-    | first :: rest -> first, rest
-    | _ -> failwith "No card available"
+let rec drawCards deck n =
+    match deck, n with
+    | deck, n when n <= 0 -> [], deck
+    | [], n -> failwith "ドローできるカードがありません"
+    | first :: rest, n -> 
+        let cards, _deck = drawCards rest (n - 1)
+        first :: cards, _deck
 
-let drawCard state =
-    let card, deck = drawOneCard state.Deck
-    match state.Turn with
-    | Player -> 
-        let cards = card :: state.Player.Cards
-        if calcPoint cards = Bust then { state with Deck=deck; Player={Cards=cards}; Result=PlayerBusted}
-        else { state with Player={Cards=cards}; Deck=deck }
-    | Dealer -> 
-        let cards = card :: state.Dealer.Cards
-        if calcPoint cards = Bust then { state with Deck=deck; Dealer={Cards=cards}; Result=DealerBusted}
-        else { state with Dealer={Cards=cards}; Deck=deck }
-
-let cardLog state =
-    match state.Turn with
-    | Player -> printfn "あなたの引いたカードは%sです" (cardInfo state.Player.Cards.[0])
-    | Dealer -> printfn "ディーラーの引いたカードは%sです" (cardInfo state.Dealer.Cards.[0])
-    state
-
-let changeTurn state =
-    match state.Turn with
-    | Player -> { state with Turn=Dealer}
-    | Dealer -> { state with Turn=Player}
-
-let rec humanAction state =
-    match state.Result with
-    | InProgress ->
+let rec playerAction state =
+    let playerPoint = calcPoint state.PlayerTurn
+    match playerPoint with
+    | Bust -> {Deck=state.Deck; PlayerEnd=(state.PlayerTurn, Bust); DealerTurn=state.Dealer }
+    | Point p ->
         printfn "カードを引きますか？ y/n"
         match Console.ReadLine() with
-        | "y" | "Y" -> state |> drawCard |> cardLog |> humanAction
-        | "n" | "N" -> state |> changeTurn 
-        | _ -> humanAction state
-    | _ -> { state with Turn=Dealer }
+        | "y" | "Y" ->
+            let cards, deck = drawCards state.Deck 1
+            printfn "あなたの引いたカードは%sです" (cardInfo cards.[0])
+            playerAction {Deck=deck; PlayerTurn=cards @ state.PlayerTurn; Dealer=state.Dealer }
+        | "n" | "N" -> {Deck=state.Deck; PlayerEnd=(state.PlayerTurn, playerPoint); DealerTurn=state.Dealer }
+        | _ -> playerAction state
 
-let judge state =
-    let humanPoint = calcPoint state.Player.Cards
-    let dealerPoint = calcPoint state.Dealer.Cards
-    match humanPoint, dealerPoint with
-    | Bust, _ -> PlayerBusted
-    | _, Bust -> DealerBusted
-    | human, dealer when human > dealer -> PlayerWon
-    | human, dealer when human < dealer -> DealerWon
-    | _, _ -> Draw
-
-let rec dealerAction state =
-    let point = calcPoint state.Dealer.Cards
+let rec dealerAction (state : BlackjackPlayerEnd) : BlackjackDealerEnd =
+    let point = calcPoint state.DealerTurn
     match point with
-    | Bust -> { state with Result=DealerBusted }
-    | Point point ->
-        if point < 17 then state |> drawCard |> cardLog |> dealerAction
-        else { state with Result=(judge state)} 
+    | Bust -> { Deck=state.Deck; PlayerEnd=state.PlayerEnd; DealerEnd=(state.DealerTurn, point) }
+    | Point point when point >= 17 -> { Deck=state.Deck; PlayerEnd=state.PlayerEnd; DealerEnd=(state.DealerTurn, Point point) }
+    | _ ->
+        let cards, deck = drawCards state.Deck 1
+        printfn "ディーラーの引いたカードは%sです" (cardInfo cards.[0])
+        dealerAction { Deck=deck; PlayerEnd=state.PlayerEnd; DealerTurn=cards @ state.DealerTurn }
 
 let printJudgement result =
-    match result with
-    | PlayerBusted -> printfn "あなたの負けです (バスト)"
-    | DealerBusted -> printfn "あなたの勝ちです (ディーラーバスト)"
-    | Draw -> printfn "引き分けです"
-    | PlayerWon -> printfn "あなたの勝ちです"
-    | DealerWon -> printfn "あなたの負けです"
-    | InProgress -> failwith "まだ決着が付いていません"
+    let _, playerPoint = result.PlayerEnd
+    let _, dealerPoint = result.DealerEnd
+    match playerPoint, dealerPoint with
+    | Bust, _ -> printfn "あなたの負けです (バスト)"
+    | _, Bust -> printfn "あなたの勝ちです (ディーラーバスト)"
+    | p, d when p = d -> printfn "引き分けです"
+    | p, d when p > d -> printfn "あなたの勝ちです"
+    | _ -> printfn "あなたの負けです"
+
+let initialize : BlackjackInitialized =
+    let deck = createDeck
+    let playerCards, deck = drawCards deck 2
+    let dealerCards, deck = drawCards deck 2
+    { Deck=deck; PlayerTurn=playerCards; Dealer=dealerCards }
+
+let initializedMessage (initialized : BlackjackInitialized) =
+    printfn "あなたの引いたカードは%sです" (cardInfo initialized.PlayerTurn.[0])
+    printfn "あなたの引いたカードは%sです" (cardInfo initialized.PlayerTurn.[1])
+    printfn "ディーラーの引いたカードは%sです" (cardInfo initialized.Dealer.[0])
+    initialized
 
 [<EntryPoint>]
 let main argv =
-    let state = startGame
-    let humanEnd = state |> drawCard |> cardLog |> drawCard |> cardLog |> changeTurn
-    let humanNeedAction = humanEnd |> drawCard |> cardLog |> drawCard |> changeTurn
+    let playerActionWaiting = initialize |> initializedMessage
+    let playerActionDone = playerAction playerActionWaiting
+    match playerActionDone.PlayerEnd with
+    | _, Bust -> printfn "あなたの負けです(バスト)"
+    | _, _ ->
+        printfn "ディーラーの引いたカードは%sです" (cardInfo playerActionDone.DealerTurn.[0])
+        let waitForResult = dealerAction playerActionDone
+        printJudgement waitForResult
 
-    let humanActionDone = humanAction humanNeedAction
-    match humanActionDone.Result with
-    | PlayerBusted -> printJudgement humanActionDone.Result
-    | _ ->
-        let dealerDone = humanActionDone |> cardLog |> dealerAction
-        printJudgement dealerDone.Result
     0
