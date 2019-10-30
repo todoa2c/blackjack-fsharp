@@ -99,14 +99,14 @@ let rec playerAction state =
         | "n" | "N" -> {Deck=state.Deck; PlayerEnd=(state.PlayerTurn, playerPoint); DealerTurn=state.Dealer }
         | _ -> playerAction state
 
-let rec dealerAction (state : BlackjackPlayerEnd) : BlackjackDealerEnd =
+let rec dealerAction state =
+    printfn "ディーラーの引いたカードは%sです" (cardInfo state.DealerTurn.[0])
     let point = calcPoint state.DealerTurn
     match point with
     | Bust -> { Deck=state.Deck; PlayerEnd=state.PlayerEnd; DealerEnd=(state.DealerTurn, point) }
     | Point point when point >= 17 -> { Deck=state.Deck; PlayerEnd=state.PlayerEnd; DealerEnd=(state.DealerTurn, Point point) }
     | _ ->
         let cards, deck = drawCards state.Deck 1
-        printfn "ディーラーの引いたカードは%sです" (cardInfo cards.[0])
         dealerAction { Deck=deck; PlayerEnd=state.PlayerEnd; DealerTurn=cards @ state.DealerTurn }
 
 let printJudgement result =
@@ -115,9 +115,9 @@ let printJudgement result =
     match playerPoint, dealerPoint with
     | Bust, _ -> printfn "あなたの負けです (バスト)"
     | _, Bust -> printfn "あなたの勝ちです (ディーラーバスト)"
-    | p, d when p = d -> printfn "引き分けです"
     | p, d when p > d -> printfn "あなたの勝ちです"
-    | _ -> printfn "あなたの負けです"
+    | p, d when p < d -> printfn "あなたの負けです"
+    | p, d -> printfn "引き分けです"
 
 let initialize : BlackjackInitialized =
     let deck = createDeck
@@ -128,7 +128,7 @@ let initialize : BlackjackInitialized =
 let initializedMessage (initialized : BlackjackInitialized) =
     printfn "あなたの引いたカードは%sです" (cardInfo initialized.PlayerTurn.[0])
     printfn "あなたの引いたカードは%sです" (cardInfo initialized.PlayerTurn.[1])
-    printfn "ディーラーの引いたカードは%sです" (cardInfo initialized.Dealer.[0])
+    printfn "ディーラーの引いたカードは%sです" (cardInfo initialized.Dealer.[1])
     initialized
 
 [<EntryPoint>]
@@ -138,7 +138,6 @@ let main argv =
     match playerActionDone.PlayerEnd with
     | _, Bust -> printfn "あなたの負けです(バスト)"
     | _, _ ->
-        printfn "ディーラーの引いたカードは%sです" (cardInfo playerActionDone.DealerTurn.[0])
         let waitForResult = dealerAction playerActionDone
         printJudgement waitForResult
 
