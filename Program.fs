@@ -61,14 +61,21 @@ let cardInfo card =
     | Spade, i -> sprintf "スペードの%i" i
 
 let calcPoint cards =
-    let cardPoint (mark, number) =
+    let cardPoint (_, number) =
         match number with
         | 11 | 12 | 13 -> 10
-        | _ -> number  // TODO ace can be one or eleven
+        | _ -> number
 
-    match List.sumBy cardPoint cards with
-    | point when point > 21 -> Bust
-    | point -> Point(point)
+    let pointsWithoutAce = cards |> List.map cardPoint |> List.filter (fun p -> p > 1)
+    let aceNum = (List.length cards) - (List.length pointsWithoutAce)
+    let pointWithoutAceSum = pointsWithoutAce |> List.sum
+    let pointsWithAce1, pointsWithAce11 = pointWithoutAceSum + aceNum, pointWithoutAceSum + aceNum + 10
+
+    match aceNum, pointsWithAce1, pointsWithAce11 with
+    | 0, _, _ when pointWithoutAceSum <= 21-> Point pointWithoutAceSum
+    | _, _, p11 when p11 <= 21 -> Point p11
+    | _, p1, _ when p1 <= 21 -> Point p1
+    | _, _, _ -> Bust
 
 let rec drawCards deck n =
     match deck, n with
