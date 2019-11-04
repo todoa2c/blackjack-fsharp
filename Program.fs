@@ -11,14 +11,6 @@ type Cards = Card list
 
 type StandCards = Cards * Point
 
-type Player = 
-    | Cards of Cards
-    | StandCards of StandCards
-
-type Dealer =
-    | Cards of Cards
-    | StandCards of StandCards
-
 type BlackjackInitialized = {
     Deck: Deck
     PlayerTurn: Cards
