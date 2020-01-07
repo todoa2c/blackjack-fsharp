@@ -82,7 +82,7 @@ let calcPoint cards =
 let rec drawCards deck n =
     match deck, n with
     | deck, n when n <= 0 -> [], deck
-    | [], n -> failwith "ドローできるカードがありません"
+    | [], _ -> failwith "ドローできるカードがありません"
     | first :: rest, n -> 
         let cards, _deck = drawCards rest (n - 1)
         first :: cards, _deck
@@ -91,7 +91,7 @@ let rec playerAction state =
     let playerPoint = calcPoint state.PlayerTurn
     match playerPoint with
     | Bust -> PlayerBustEnd
-    | Point p ->
+    | Point _ ->
         printfn "カードを引きますか？ y/n"
         match Console.ReadLine() with
         | "y" | "Y" ->
@@ -121,7 +121,7 @@ let printJudgement result =
         match playerPoint, dealerPoint with
         | p, d when p > d -> printfn "あなたの勝ちです"
         | p, d when p < d -> printfn "あなたの負けです"
-        | p, d -> printfn "引き分けです"
+        | _, _ -> printfn "引き分けです"
 
 let initialize =
     let deck = createDeck
@@ -136,7 +136,7 @@ let printStartMessage initialized =
     initialized
 
 [<EntryPoint>]
-let main argv =
+let main _ =
     let playerActionWaiting = initialize |> printStartMessage
     let playerActionDone = playerAction playerActionWaiting
     match playerActionDone with
