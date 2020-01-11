@@ -17,3 +17,7 @@ let testCalcPoints () =
 
     Assert.That(calcPoint [(Club, 1); (Diamond, 13)], Is.EqualTo(Point(21)))
     Assert.That(calcPoint [(Club, 1); (Diamond, 1); (Heart, 8)], Is.EqualTo(Point(20)))
+
+[<Test>]
+let testDrawEmptyDeck () =
+    Assert.That(drawCards [], Is.EqualTo())
